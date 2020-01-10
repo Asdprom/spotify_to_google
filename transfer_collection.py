@@ -2,36 +2,57 @@ from gmusicapi import Mobileclient
 import spotipy
 import spotipy.util as util
 
+def add_search_string(tracks, search_strings):
+    for i, item in enumerate(tracks['items']):
+        track = item['track']
+        search_strings.append(track['artists'][0]['name'] + ' ' + track['name'])
 
 
-username = 'spotify account name/email'
-playlist_name = "Imported Music"
-client_id = 'your-spotify-client-id-from-app-dashboard'
-client_secret='your-spotify-secret-client-id-from-app-dashboard'
+client_id = 'your client id here'
+client_secret='your secret client id here'
 redirect_uri='http://localhost:4002'
 
-token = util.prompt_for_user_token(username, 'user-library-read', client_id, client_secret, redirect_uri)
+username = input('Enter your account name/email: ')
+token = util.prompt_for_user_token(username, 'user-library-read playlist-read-private', client_id, client_secret, redirect_uri)
+
+playlist_name = input('Enter destination playlist name: ')
 
 search_strings = []
 if token:
     sp = spotipy.Spotify(auth=token)
+    playlists = sp.current_user_playlists()
+    for playlist in playlists['items']:
+        print(f'PLAYLIST ', playlist['name'])
+        print('  total tracks', playlist['tracks']['total'])
+
+    playlist_to_transfer_name = input('Input name of playlist you want to transfer (if you want export saved songs - type \'saved\'): ')
+
+    playlist_to_transfer = next((x for x in playlists['items'] if x['name'] == playlist_to_transfer_name), None)
     page_length = 20
     page = 0
-
-    while True:
-        results = sp.current_user_saved_tracks(page_length, page * page_length)
-        for item in results['items']:
-            track = item['track']
-            search_strings.append(
-                track['name'] + ' ' + track['artists'][0]['name'])
-        if len(results['items']) != page_length:
-            break
-        else:
-            page += 1
+    if playlist_to_transfer_name == 'saved':
+        while True:
+            results = sp.current_user_saved_tracks(page_length, page * page_length)
+            add_search_string(results, search_strings)
+            if len(results['items']) != page_length:
+                break
+            else:
+                page += 1
+    elif playlist_to_transfer == None:
+            print("Can't find playlist ", playlist_to_transfer_name)
+            exit(0)
+    else:
+        print("Playlist ", playlist_to_transfer_name)
+        playlist = sp.user_playlist(username, playlist_to_transfer['id'], fields="tracks,next")
+        tracks = playlist['tracks']
+        add_search_string(tracks, search_strings)
+        while tracks['next']:
+            tracks = sp.next(tracks)
+            add_search_string(tracks, search_strings)
 else:
     print("Can't get token for", username)
 
-print(f'Detected {len(search_strings)} songs to export.')
+print(f'Detected {len(search_strings)} songs to transfer.')
 
 mm = Mobileclient()
 mm.perform_oauth() 
